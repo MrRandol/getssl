@@ -503,7 +503,7 @@ urlbase64() { # urlbase64: base64 encoded string with '+' replaced with '-' and 
 }
 
 usage() { # program usage
-  echo "Usage: $PROGNAME [-h|--help] [-d|--debug] [-c|--create] [-f|--force] [-a|--all] [-q|--quiet] [-u|--upgrade] [-w working_dir] domain"
+  echo "Usage: $PROGNAME [-h|--help] [-d|--debug] [-c|--create] [-f|--force] [-a|--all] [-q|--quiet] [-u|--upgrade] [-w working_dir] [-t openssl_tunnel:tunnel_port] domain"
 }
 
 write_domain_template() { # write out a template file for a domain.
@@ -644,6 +644,8 @@ while [[ -n $1 ]]; do
      _UPGRADE=1 ;;
     -w)
       shift; WORKING_DIR="$1" ;;
+    -t)
+      shift; TUNNEL="$1" ;;
     -* | --*)
       usage
       error_exit "Unknown option $1" ;;
@@ -761,7 +763,13 @@ if [ ${_CREATE_CONFIG} -eq 1 ]; then
   else
     info "creating domain config file in $DOMAIN_DIR/getssl.cfg"
     # if domain has an existsing cert, copy from domain and use to create defaults.
-    EX_CERT=$(echo | openssl s_client -servername "${DOMAIN}" -connect "${DOMAIN}:443" 2>/dev/null | openssl x509 2>/dev/null)
+    # Build final openssl connect depending on params
+    if [ -z "$TUNNEL" ] ; then
+      FINAL_SSL_CONNECT="${DOMAIN}:443"
+    else
+      FINAL_SSL_CONNECT="${TUNNEL}"
+    fi
+    EX_CERT=$(echo | openssl s_client -servername "${DOMAIN}" -connect "${FINAL_SSL_CONNECT}" 2>/dev/null | openssl x509 2>/dev/null)
     EX_SANS="www.${DOMAIN}"
     if [ ! -z "${EX_CERT}" ]; then
       if [ ! -f "$DOMAIN_DIR/${DOMAIN}.crt" ]; then
@@ -810,7 +818,13 @@ fi
 # if check_remote is true then connect and obtain the current certificate (if not forcing renewal)
 if [[ "${CHECK_REMOTE}" == "true" ]] && [ $_FORCE_RENEW -eq 0 ]; then
   debug "getting certificate for $DOMAIN from remote server"
-  EX_CERT=$(echo | openssl s_client -servername "${DOMAIN}" -connect "${DOMAIN}:${REMOTE_PORT}" 2>/dev/null | openssl x509 2>/dev/null)
+  # Build final openssl connect depending on params
+  if [ -z "$TUNNEL" ] ; then
+    FINAL_SSL_CONNECT="${DOMAIN}:${REMOTE_PORT}"
+  else
+    FINAL_SSL_CONNECT="${TUNNEL}"
+  fi
+  EX_CERT=$(echo | openssl s_client -servername "${DOMAIN}" -connect "${FINAL_SSL_CONNECT}" 2>/dev/null | openssl x509 2>/dev/null)
   if [ ! -z "$EX_CERT" ]; then # if obtained a cert
     if [ -f "$CERT_FILE" ]; then # if local exists
       CERT_REMOTE=$(echo "$EX_CERT" | openssl x509 -noout -fingerprint 2>/dev/null)
@@ -1255,7 +1269,13 @@ reload_service
 
 # Check if the certificate is installed correctly
 if [[ ${CHECK_REMOTE} == "true" ]]; then
-  CERT_REMOTE=$(echo | openssl s_client -servername "${DOMAIN}" -connect "${DOMAIN}:${REMOTE_PORT}" 2>/dev/null | openssl x509 -noout -fingerprint 2>/dev/null)
+  # Build final openssl connect depending on params
+  if [ -z "$TUNNEL" ] ; then
+    FINAL_SSL_CONNECT="${DOMAIN}:${REMOTE_PORT}"
+  else
+    FINAL_SSL_CONNECT="${TUNNEL}"
+  fi
+  CERT_REMOTE=$(echo | openssl s_client -servername "${DOMAIN}" -connect "${FINAL_SSL_CONNECT}" 2>/dev/null | openssl x509 -noout -fingerprint 2>/dev/null)
   CERT_LOCAL=$(openssl x509 -noout -fingerprint < "$CERT_FILE" 2>/dev/null)
   if [ "$CERT_LOCAL" == "$CERT_REMOTE" ]; then
     info "certificate installed OK on server"

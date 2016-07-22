@@ -45,6 +45,7 @@ Options:
   -q, --quiet     Quiet mode (only outputs on error, or succcess of new cert)
   -u, --upgrade   Upgrade getssl if more recent version available
   -w working_dir  Working directory
+  -t tunnel       openssl tunnel in case of proxy (of form <host>:<port>)
 ```
 
 ## Getting started
